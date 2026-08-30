@@ -4,8 +4,8 @@ Office dashboard and bus kiosk. Shared roster, demo messages. No MQTT yet.
 
 | File | What it is |
 |---|---|
-| `office.html` | Dispatcher dashboard + roster editor |
-| `bus.html` | Driver kiosk — pick assignment, then category grid |
+| `office.html` / `office.css` / `office.js` | Dispatcher dashboard + roster editor |
+| `bus.html` / `bus.css` / `bus.js` | Driver kiosk — pick assignment, then category grid |
 | `fleet-store.js` | Shared roster load/save |
 | `serve.py` | Local server that persists `data/roster.json` |
 | `data/roster.json` | Office-maintained bus list |
@@ -16,13 +16,11 @@ Office dashboard and bus kiosk. Shared roster, demo messages. No MQTT yet.
 Each assignment the office creates has:
 
 - **State bus number** — South Carolina format `508-6238` (3 digits, hyphen, 4 digits)
-- **Route number**
+- **Route number** (primary label in the UI)
 - **Driver name**
 - **Comment**
 
 The bus kiosk only offers buses that are on this list. Drivers do not type a bus number.
-
-Route number is the primary label in the UI. Driver name comes next, then the state bus number.
 
 ## Serve locally (Linux)
 

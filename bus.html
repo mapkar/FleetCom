@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>FleetCom — Bus</title>
+  <link rel="stylesheet" href="bus.css" />
+</head>
+<body>
+  <header>
+    <div class="bus-tag" id="bus-tag">ROUTE —</div>
+    <div class="hdr-mid" id="clock"></div>
+    <div class="hdr-right">
+      <button class="switch" id="switch" type="button">Switch</button>
+      <span class="link" id="link">LINK</span>
+      <span class="batt" id="batt">84%</span>
+    </div>
+  </header>
+
+  <div class="banner" id="banner"></div>
+  <div class="sent" id="sent"></div>
+
+  <div class="grid-wrap">
+    <div class="cats" id="cats"></div>
+    <div class="sheet" id="sheet">
+      <div class="sheet-h">
+        <button class="back" id="back">←</button>
+        <h3 id="sheet-title"></h3>
+      </div>
+      <div class="types" id="types"></div>
+    </div>
+  </div>
+  <div class="foot">FleetCom · pick route from office roster · no typing while moving</div>
+
+  <div class="setup" id="setup">
+    <header>
+      <h1>Choose route</h1>
+      <p id="setup-sub">Office roster</p>
+    </header>
+    <div class="setup-list" id="setup-list"></div>
+  </div>
+
+  <script src="fleet-store.js"></script>
+  <script src="bus.js"></script>
+</body>
+</html>

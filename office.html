@@ -4,8 +4,99 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>FleetCom — Office</title>
+  <link rel="stylesheet" href="office.css" />
 </head>
 <body>
-<p>placeholder — replacing next</p>
+  <header>
+    <div class="logo">FLEETCOM <span>Office</span></div>
+    <div class="clock" id="clock"></div>
+    <div class="spacer"></div>
+    <div class="pill" id="src-pill">Roster</div>
+  </header>
+  <main>
+    <aside>
+      <div class="pane-h">
+        Roster
+        <span id="bus-count"></span>
+        <button type="button" id="add-bus">+ Add bus</button>
+      </div>
+      <div class="bus-list" id="buses"></div>
+    </aside>
+    <section>
+      <div class="pane-h">Message feed</div>
+      <div class="filters">
+        <button class="on" data-f="all">All</button>
+        <button data-f="unacked">Unacked</button>
+        <button data-f="priority">Priority</button>
+      </div>
+      <div class="feed" id="feed"></div>
+    </section>
+    <div class="compose">
+      <div class="pane-h">Compose</div>
+      <div class="sel-card" id="sel-card"></div>
+      <form id="compose">
+        <label>To</label>
+        <select id="to"></select>
+        <label>Type</label>
+        <select id="otype">
+          <option value="route_adjustment">Route adjustment</option>
+          <option value="skip_stop">Skip stop</option>
+          <option value="reroute">Reroute</option>
+          <option value="schedule_change">Schedule change</option>
+          <option value="hold_at_school">Hold at school</option>
+          <option value="confirm_count">Confirm count</option>
+          <option value="confirm_location">Confirm location</option>
+          <option value="call_office">Call office</option>
+          <option value="radio_check">Radio check</option>
+          <option value="emergency_return">Emergency return</option>
+          <option value="emergency_hold">Emergency hold</option>
+          <option value="weather_alert">Weather alert</option>
+          <option value="security_notice">Security notice</option>
+          <option value="general_notice">General notice</option>
+        </select>
+        <label>Priority</label>
+        <select id="opri">
+          <option value="normal">Normal</option>
+          <option value="high">High</option>
+          <option value="emergency">Emergency</option>
+        </select>
+        <label>Short text (optional)</label>
+        <textarea id="otext" placeholder="Glanceable summary only"></textarea>
+        <button class="send" type="submit">Send</button>
+      </form>
+    </div>
+  </main>
+  <div class="toast" id="toast"></div>
+  <div class="mask" id="mask">
+    <form class="dlg" id="bus-form">
+      <h2 id="dlg-title">Add bus</h2>
+      <input type="hidden" id="f-id" />
+      <div class="field">
+        <label for="f-route">Route number</label>
+        <input type="text" id="f-route" placeholder="42" autocomplete="off" />
+      </div>
+      <div class="field">
+        <label for="f-driver">Driver name</label>
+        <input type="text" id="f-driver" placeholder="M. Hayes" autocomplete="off" />
+      </div>
+      <div class="field">
+        <label for="f-state">State bus number</label>
+        <input type="text" id="f-state" placeholder="508-6238" maxlength="8" autocomplete="off" />
+        <div class="hint">South Carolina format: district-unit, e.g. 508-6238</div>
+      </div>
+      <div class="field">
+        <label for="f-comment">Comment</label>
+        <textarea id="f-comment" placeholder="School, shift, spare radio…"></textarea>
+      </div>
+      <div class="err" id="f-err"></div>
+      <div class="dlg-row">
+        <button type="button" class="danger" id="f-del" hidden>Delete</button>
+        <button type="button" class="ghost" id="f-cancel">Cancel</button>
+        <button type="submit" class="save">Save</button>
+      </div>
+    </form>
+  </div>
+  <script src="fleet-store.js"></script>
+  <script src="office.js"></script>
 </body>
 </html>
