@@ -1,4 +1,5 @@
     const now = () => new Date().toISOString();
+    const MSG_KEY = "fleetcom.office.msgs";
     const ago = (iso) => {
       const s = Math.max(0, (Date.now() - new Date(iso)) / 1000);
       if (s < 60) return Math.floor(s) + "s";
@@ -9,30 +10,68 @@
     const presence = {};
     let applyingRemote = false;
 
-    function ingestMsg(m) {
-      if (!m || !m.msg_id) return;
-      const i = msgs.findIndex(x => x.msg_id === m.msg_id);
-      if (i >= 0) msgs[i] = Object.assign({}, msgs[i], m);
-      else msgs.unshift(m);
+    function loadMsgs() {
+      try {
+        const raw = localStorage.getItem(MSG_KEY);
+        const list = raw ? JSON.parse(raw) : [];
+        return Array.isArray(list) ? list.filter(m => m && m.msg_id) : [];
+      } catch (_) {
+        return [];
+      }
+    }
+    function saveMsgs() {
+      try { localStorage.setItem(MSG_KEY, JSON.stringify(msgs.slice(0, 250))); } catch (_) {}
     }
 
-    let selected = "42";
-    let filter = "all";
-    let msgs = [
-      { msg_id: "m1", timestamp: new Date(Date.now() - 90000).toISOString(), sender: "bus-31", direction: "bus_to_office", bus_id: "31", priority: "emergency", category: "emergency", type: "medical_emergency", status: "pending", text: "Medical emergency — student" },
-      { msg_id: "m2", timestamp: new Date(Date.now() - 4 * 60000).toISOString(), sender: "bus-17", direction: "bus_to_office", bus_id: "17", priority: "high", category: "delay", type: "traffic", status: "pending", text: "Traffic delay US-123" },
-      { msg_id: "m3", timestamp: new Date(Date.now() - 6 * 60000).toISOString(), sender: "bus-42", direction: "bus_to_office", bus_id: "42", priority: "normal", category: "status", type: "boarding_complete", status: "pending", text: "Boarding complete" },
-      { msg_id: "m4", timestamp: new Date(Date.now() - 18 * 60000).toISOString(), sender: "office", direction: "office_to_bus", bus_id: "05", priority: "normal", category: "office", type: "radio_check", status: "acked", text: "Radio check" },
-      { msg_id: "m5", timestamp: new Date(Date.now() - 22 * 60000).toISOString(), sender: "bus-23", direction: "bus_to_office", bus_id: "23", priority: "normal", category: "route", type: "last_stop_complete", status: "dismissed", text: "Last stop complete" }
-    ];
+    function ingestMsg(m) {
+      if (!m || !m.msg_id) return { added: false, statusChanged: false };
+      const i = msgs.findIndex(x => x.msg_id === m.msg_id);
+      if (i >= 0) {
+        const prev = msgs[i].status;
+        msgs[i] = Object.assign({}, msgs[i], m);
+        saveMsgs();
+        return { added: false, statusChanged: !!(m.status && m.status !== prev), prevStatus: prev, row: msgs[i] };
+      }
+      if (!m.text && !m.type && m.status) {
+        return { added: false, statusChanged: false };
+      }
+      msgs.unshift(m);
+      saveMsgs();
+      return { added: true, statusChanged: false, row: m };
+    }
 
+    let selected = "";
+    let filter = "all";
+    let msgs = loadMsgs();
+
+    function routeLabel(route) {
+      return route ? ("Route: " + route) : "Route: —";
+    }
     function labelBus(b) {
-      if (!b) return "";
-      return "Rt " + b.route_number;
+      if (!b) return "Route: —";
+      return routeLabel(b.route_number);
     }
     function busSub(b) {
       if (!b) return "";
       return [b.driver_name || "No driver", b.state_number].filter(Boolean).join(" · ");
+    }
+    function whoFor(m) {
+      const rec = FleetStore.find(m.bus_id);
+      if (m.direction === "bus_to_office") return rec ? labelBus(rec) : routeLabel(m.bus_id);
+      if (m.bus_id) return "Office → " + (rec ? labelBus(rec) : routeLabel(m.bus_id));
+      return "Office → all routes";
+    }
+    function statusLabel(m) {
+      if (m.direction === "office_to_bus") {
+        if (m.status === "acked") return "Driver confirmed";
+        if (m.status === "denied") return "Driver denied";
+        if (m.status === "dismissed") return "Driver dismissed";
+        return "Waiting on driver";
+      }
+      if (m.status === "acked") return "Office acked";
+      if (m.status === "denied") return "Office denied";
+      if (m.status === "dismissed") return "Dismissed";
+      return m.status || "pending";
     }
 
     function flagsFor(id) {
@@ -56,7 +95,7 @@
         <div class="bus ${b.id === selected ? "sel" : ""}" data-id="${b.id}">
           <div class="dot ${p.online ? "on" : "off"}"></div>
           <div>
-            <div class="bus-id">Rt ${b.route_number}</div>
+            <div class="bus-id">${labelBus(b)}</div>
             <div class="bus-meta">${busSub(b)} · ${p.online ? "now" : ago(p.last)}</div>
             ${b.comment ? `<div class="bus-cmt">${b.comment}</div>` : ""}
           </div>
@@ -66,27 +105,31 @@
             ${flags.includes("pend") ? '<span class="flag pend">●</span>' : ""}
           </div>
         </div>`;
-      }).join("") || `<p style="padding:16px;color:#8b97a8">No buses yet. Add the first assignment.</p>`;
+      }).join("") || `<p style="padding:16px;color:#8b97a8">No routes yet. Add the first assignment.</p>`;
 
       const to = document.getElementById("to");
-      to.innerHTML = `<option value="broadcast">All buses (broadcast)</option>` +
+      to.innerHTML = `<option value="broadcast">All routes (broadcast)</option>` +
         roster.map(b => `<option value="${b.id}" ${b.id === selected ? "selected" : ""}>${labelBus(b)} — ${busSub(b)}</option>`).join("");
 
       const card = document.getElementById("sel-card");
       const cur = FleetStore.find(selected);
       if (cur) {
-        card.innerHTML = `<strong>Rt ${cur.route_number}</strong>
+        card.innerHTML = `<strong>${labelBus(cur)}</strong>
           ${busSub(cur)}
           ${cur.comment ? "<div style='color:#8b97a8;margin-top:4px'>" + cur.comment + "</div>" : ""}
-          <button type="button" id="edit-sel">Edit assignment</button>`;
+          <div class="sel-actions">
+            <button type="button" id="edit-sel">Edit assignment</button>
+            <button type="button" class="danger" id="del-sel">Delete route</button>
+          </div>`;
       } else {
-        card.innerHTML = "Select a bus or add one to the roster.";
+        card.innerHTML = "Select a route or add one to the roster.";
       }
     }
 
     function shown() {
       return msgs.filter(m => {
         if (filter === "unacked") return m.status === "pending" && m.direction === "bus_to_office";
+        if (filter === "replies") return m.direction === "office_to_bus" && m.status && m.status !== "pending";
         if (filter === "priority") return m.priority !== "normal";
         return true;
       }).sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
@@ -96,25 +139,21 @@
       document.getElementById("feed").innerHTML = shown().map(m => {
         const canAct = m.direction === "bus_to_office" && m.status === "pending";
         const cls = m.priority === "emergency" ? "em" : m.priority === "high" ? "hi" : "nm";
-        const rec = FleetStore.find(m.bus_id);
-        const who = m.direction === "bus_to_office"
-          ? (rec ? "Rt " + rec.route_number : "Route " + m.bus_id)
-          : ("Office → " + (m.bus_id ? (rec ? "Rt " + rec.route_number : "Route " + m.bus_id) : "all"));
         return `<article class="msg ${cls}">
           <div class="msg-top">
-            <strong>${who}</strong>
+            <strong>${whoFor(m)}</strong>
             <span class="pri ${m.priority}">${m.priority}</span>
             <span>${ago(m.timestamp)}</span>
             <span>${m.category}/${m.type}</span>
           </div>
-          <h3>${m.text || m.type}</h3>
+          <h3>${m.text || (m.type || "").replaceAll("_", " ")}</h3>
           ${canAct ? `<div class="actions">
             <button class="ack" data-act="acked" data-id="${m.msg_id}">Acknowledge</button>
             <button class="deny" data-act="denied" data-id="${m.msg_id}">Deny</button>
             <button data-act="dismissed" data-id="${m.msg_id}">Dismiss</button>
-          </div>` : `<div class="st ${m.status}">${m.status}</div>`}
+          </div>` : `<div class="st ${m.status}">${statusLabel(m)}</div>`}
         </article>`;
-      }).join("") || `<p style="padding:16px;color:#8b97a8">No messages in this filter.</p>`;
+      }).join("") || `<p style="padding:16px;color:#8b97a8">${filter === "all" ? "No live messages yet. Send from a bus or compose to a route." : "No messages in this filter."}</p>`;
     }
 
     function toast(t) {
@@ -126,7 +165,7 @@
 
     function openEditor(row) {
       document.getElementById("mask").classList.add("on");
-      document.getElementById("dlg-title").textContent = row ? "Edit assignment" : "Add bus";
+      document.getElementById("dlg-title").textContent = row ? "Edit assignment" : "Add route";
       document.getElementById("f-id").value = row ? row.id : "";
       document.getElementById("f-state").value = row ? row.state_number : "";
       document.getElementById("f-route").value = row ? row.route_number : "";
@@ -138,11 +177,25 @@
     }
     function closeEditor() { document.getElementById("mask").classList.remove("on"); }
 
+    async function deleteRoute(id) {
+      const row = FleetStore.find(id);
+      if (!row) return;
+      if (!confirm("Delete Route: " + row.route_number + " from the roster?")) return;
+      await FleetStore.remove(id);
+      if (selected === id) selected = (FleetStore.get()[0] || {}).id || "";
+      closeEditor();
+      renderBuses();
+      renderFeed();
+      FleetMQTT.publishRoster(FleetStore.get());
+      toast("Deleted Route: " + row.route_number);
+    }
+
     document.getElementById("add-bus").addEventListener("click", () => openEditor(null));
     document.getElementById("f-cancel").addEventListener("click", closeEditor);
     document.getElementById("mask").addEventListener("click", e => { if (e.target.id === "mask") closeEditor(); });
     document.getElementById("sel-card").addEventListener("click", e => {
       if (e.target.id === "edit-sel") openEditor(FleetStore.find(selected));
+      if (e.target.id === "del-sel") deleteRoute(selected);
     });
     document.getElementById("f-state").addEventListener("input", e => {
       let v = e.target.value.replace(/[^\d]/g, "").slice(0, 7);
@@ -167,17 +220,10 @@
       renderBuses();
       renderFeed();
       FleetMQTT.publishRoster(FleetStore.get());
-      toast("Roster saved · Rt " + res.row.route_number);
+      toast("Roster saved · " + labelBus(res.row));
     });
-    document.getElementById("f-del").addEventListener("click", async () => {
-      const id = document.getElementById("f-id").value;
-      const row = FleetStore.find(id);
-      if (!row || !confirm("Remove route " + row.route_number + " from the roster?")) return;
-      await FleetStore.remove(id);
-      closeEditor();
-      renderBuses();
-      FleetMQTT.publishRoster(FleetStore.get());
-      toast("Removed Rt " + row.route_number);
+    document.getElementById("f-del").addEventListener("click", () => {
+      deleteRoute(document.getElementById("f-id").value);
     });
 
     document.getElementById("buses").addEventListener("click", e => {
@@ -201,15 +247,17 @@
       const btn = e.target.closest("button[data-act]");
       if (!btn) return;
       const m = msgs.find(x => x.msg_id === btn.dataset.id);
-      if (m) m.status = btn.dataset.act;
-      if (m && m.bus_id) {
+      if (!m) return;
+      m.status = btn.dataset.act;
+      saveMsgs();
+      if (m.bus_id) {
         FleetMQTT.publish("fleet/buses/" + m.bus_id + "/ack", {
-          msg_id: m.msg_id, status: m.status, timestamp: now(), bus_id: m.bus_id
+          msg_id: m.msg_id, status: m.status, timestamp: now(), bus_id: m.bus_id, sender: "office"
         }, { qos: 1 });
       }
       renderFeed();
       renderBuses();
-      toast("Rt " + ((FleetStore.find(m.bus_id) || {}).route_number || m.bus_id) + " · " + m.status);
+      toast(whoFor(m) + " · " + m.status);
     });
     document.getElementById("compose").addEventListener("submit", e => {
       e.preventDefault();
@@ -234,7 +282,7 @@
       const ok = FleetMQTT.publish(topic, msg, { qos: 1 });
       document.getElementById("otext").value = "";
       renderFeed();
-      toast((ok ? "" : "Queued locally · ") + (to === "broadcast" ? "Broadcast sent" : "Sent to Rt " + (rec ? rec.route_number : to)));
+      toast((ok ? "" : "Queued locally · ") + (to === "broadcast" ? "Broadcast sent" : "Sent to " + (rec ? labelBus(rec) : routeLabel(to))));
     });
 
     FleetStore.onChange(() => { renderBuses(); renderFeed(); });
@@ -275,11 +323,19 @@
         renderBuses();
         return;
       }
-      if (payload && payload.msg_id) {
-        ingestMsg(payload);
-        renderFeed();
-        renderBuses();
+      if (!payload || !payload.msg_id) return;
+      const isAckTopic = parts[0] === "fleet" && parts[1] === "buses" && parts[3] === "ack";
+      const result = ingestMsg(payload);
+      if (result.added && payload.direction === "bus_to_office") {
+        FleetNotify.incoming(payload.priority);
+      } else if ((isAckTopic || result.statusChanged) && payload.direction !== "bus_to_office" && payload.sender !== "office") {
+        const row = result.row || msgs.find(x => x.msg_id === payload.msg_id);
+        if (row && row.direction === "office_to_bus" && payload.status && payload.status !== "pending") {
+          FleetNotify.reply(payload.status);
+        }
       }
+      renderFeed();
+      renderBuses();
     });
 
     document.getElementById("mqtt-pill").addEventListener("click", () => {
