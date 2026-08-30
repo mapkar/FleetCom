@@ -328,10 +328,14 @@
       setInterval(() => {
         document.getElementById("clock").textContent = new Date().toLocaleString("en-US", { timeZone: "America/New_York", weekday: "short", hour: "2-digit", minute: "2-digit", second: "2-digit" });
       }, 1000);
-      await FleetMQTT.connect();
-      if (FleetMQTT.isOnline()) {
+      const ok = await FleetMQTT.connect();
+      if (ok) {
         FleetMQTT.publishRoster(FleetStore.get());
         FleetMQTT.publish("fleet/system/heartbeat", { sender: "office", timestamp: now() }, { qos: 0 });
+      } else {
+        fillMqttForm();
+        document.getElementById("m-err").textContent = FleetMQTT.getStatus().text;
+        document.getElementById("mqtt-mask").classList.add("on");
       }
     }
     start();

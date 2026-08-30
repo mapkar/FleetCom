@@ -258,7 +258,10 @@
         username: document.getElementById("m-user").value,
         password: document.getElementById("m-pass").value
       });
+      const hint = document.getElementById("mqtt-hint");
+      if (hint) hint.textContent = "Connecting…";
       await FleetMQTT.connect();
+      if (hint) hint.textContent = FleetMQTT.getStatus().text;
       publishStatus();
     });
 
@@ -275,5 +278,7 @@
       document.getElementById("m-user").value = c.username || "";
       document.getElementById("m-pass").value = c.password || "";
       await FleetMQTT.connect();
+      const hint = document.getElementById("mqtt-hint");
+      if (hint) hint.textContent = FleetMQTT.getStatus().text;
       publishStatus();
     });

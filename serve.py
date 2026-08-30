@@ -146,7 +146,15 @@ class MqttBridge:
         self._send(packet)
         cmd, body = self._recv_packet()
         if cmd >> 4 != 2 or len(body) < 2 or body[1] != 0:
-            raise ConnectionError("CONNACK refused")
+            code = body[1] if len(body) > 1 else -1
+            reasons = {
+                1: "unacceptable protocol",
+                2: "client id rejected",
+                3: "broker unavailable",
+                4: "bad username or password",
+                5: "not authorized",
+            }
+            raise ConnectionError(reasons.get(code, f"CONNACK refused ({code})"))
         # subscribe fleet/#
         mid = self.next_mid()
         sub = struct.pack("!H", mid) + encode_str("fleet/#") + bytes([1])
