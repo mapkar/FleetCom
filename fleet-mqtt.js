@@ -8,6 +8,7 @@
   let mode = "off"; /* off | ws | bridge */
   let status = "offline";
   let statusText = "MQTT off";
+  let lastKind = ""; /* "" | need-auth | bad-auth | net */
   let cfg = loadCfg();
   let bridgeTimer = null;
   let seen = new Set();
@@ -35,9 +36,10 @@
     }));
   }
 
-  function setStatus(s, text) {
+  function setStatus(s, text, kind) {
     status = s;
     statusText = text;
+    if (kind) lastKind = kind;
     listeners.status.forEach((fn) => fn(s, text, mode));
   }
 
@@ -56,8 +58,23 @@
     return proto + "://" + cfg.host + ":" + port + path;
   }
 
+  function classifyErr(err) {
+    const msg = (err && err.message) ? err.message : String(err || "");
+    const code = err && err.code;
+    if (code === 4 || /bad user|bad username or password/i.test(msg)) return "bad-auth";
+    if (code === 5 || /not authorized/i.test(msg)) return cfg.username ? "bad-auth" : "need-auth";
+    if (/CONNACK refused \(4\)|bad username/i.test(msg)) return "bad-auth";
+    if (/CONNACK refused \(5\)|not authorized/i.test(msg)) return cfg.username ? "bad-auth" : "need-auth";
+    return "net";
+  }
+
+  function authMessage(kind) {
+    if (kind === "need-auth") return "Automaton requires an MQTT username and password";
+    if (kind === "bad-auth") return "MQTT username or password was rejected";
+    return "";
+  }
+
   function handlePacket(topic, payload) {
-    const key = topic + "|" + (payload && payload.msg_id ? payload.msg_id : JSON.stringify(payload).slice(0, 80));
     if (payload && payload.msg_id) {
       if (seen.has(payload.msg_id)) return;
       seen.add(payload.msg_id);
@@ -75,8 +92,8 @@
       const url = wsUrl(port);
       const opts = {
         clientId: "fleetcom-" + Math.random().toString(16).slice(2, 10),
-        reconnectPeriod: 4000,
-        connectTimeout: 6000,
+        reconnectPeriod: 0,
+        connectTimeout: 5000,
         keepalive: 30,
         clean: true,
         protocolVersion: 4
@@ -84,16 +101,24 @@
       if (cfg.username) opts.username = cfg.username;
       if (cfg.password) opts.password = cfg.password;
       const c = mqtt.connect(url, opts);
-      const t = setTimeout(() => {
-        try { c.end(true); } catch (_) {}
-        reject(new Error("timeout " + url));
-      }, 7000);
-      c.on("connect", () => {
+      let settled = false;
+      const finish = (err, ok) => {
+        if (settled) return;
+        settled = true;
         clearTimeout(t);
-        resolve(c);
+        if (err) {
+          try { c.end(true); } catch (_) {}
+          reject(err);
+        } else {
+          resolve(ok);
+        }
+      };
+      const t = setTimeout(() => finish(new Error("timeout " + url)), 6000);
+      c.on("connect", () => finish(null, c));
+      c.on("error", (e) => finish(e || new Error("MQTT error at " + url)));
+      c.on("close", () => {
+        if (!settled) finish(new Error("closed " + url));
       });
-      c.on("error", () => {});
-      c.on("close", () => {});
     });
   }
 
@@ -110,6 +135,11 @@
         return c;
       } catch (e) {
         last = e;
+        const kind = classifyErr(e);
+        if (kind === "need-auth" || kind === "bad-auth") {
+          e.fleetKind = kind;
+          throw e;
+        }
       }
     }
     throw last || new Error("no websocket listener");
@@ -118,7 +148,8 @@
   function wireWs(c) {
     client = c;
     mode = "ws";
-    setStatus("online", "MQTT WS " + cfg.host + ":" + cfg.wsPort);
+    c.options.reconnectPeriod = 4000;
+    setStatus("online", "MQTT WS " + cfg.host + ":" + cfg.wsPort, "ok");
     c.subscribe([
       "fleet/buses/+/messages/out",
       "fleet/buses/+/messages/in",
@@ -134,16 +165,26 @@
       if (mode === "ws") setStatus("offline", "MQTT dropped");
     });
     c.on("reconnect", () => setStatus("connecting", "MQTT reconnect"));
-    c.on("connect", () => setStatus("online", "MQTT WS " + cfg.host + ":" + cfg.wsPort));
+    c.on("connect", () => setStatus("online", "MQTT WS " + cfg.host + ":" + cfg.wsPort, "ok"));
+    c.on("error", (e) => {
+      const kind = classifyErr(e);
+      if (kind === "need-auth" || kind === "bad-auth") {
+        setStatus("offline", authMessage(kind), kind);
+      }
+    });
   }
 
   async function tryBridge() {
     const res = await fetch("/api/mqtt/status", { cache: "no-store" });
     if (!res.ok) throw new Error("no bridge");
     const info = await res.json();
-    if (!info.connected) throw new Error(info.error || "bridge offline");
+    if (!info.connected) {
+      const err = new Error(info.error || "bridge offline");
+      err.fleetKind = classifyErr(err);
+      throw err;
+    }
     mode = "bridge";
-    setStatus("online", "MQTT via serve.py → " + (info.host || cfg.host) + ":" + (info.port || cfg.tcpPort));
+    setStatus("online", "MQTT via serve.py → " + (info.host || cfg.host) + ":" + (info.port || cfg.tcpPort), "ok");
     if (bridgeTimer) clearInterval(bridgeTimer);
     let since = 0;
     async function pull() {
@@ -153,8 +194,11 @@
         const data = await r.json();
         since = data.cursor || since;
         (data.messages || []).forEach((m) => handlePacket(m.topic, m.payload));
-        if (data.connected) setStatus("online", "MQTT via serve.py → " + (data.host || cfg.host));
-        else setStatus("connecting", "bridge reconnecting");
+        if (data.connected) setStatus("online", "MQTT via serve.py → " + (data.host || cfg.host), "ok");
+        else {
+          const kind = classifyErr(data.error || "");
+          setStatus("connecting", kind === "need-auth" || kind === "bad-auth" ? authMessage(kind) : "bridge reconnecting", kind);
+        }
       } catch (_) {}
     }
     await pull();
@@ -164,13 +208,15 @@
   const Mqtt = {
     getConfig() { return Object.assign({}, cfg); },
     setConfig(next) { saveCfg(next); cfg = loadCfg(); },
-    getStatus() { return { status: status, text: statusText, mode: mode }; },
+    getStatus() { return { status: status, text: statusText, mode: mode, kind: lastKind }; },
     onStatus(fn) { listeners.status.add(fn); return () => listeners.status.delete(fn); },
     onMessage(fn) { listeners.message.add(fn); return () => listeners.message.delete(fn); },
     isOnline() { return status === "online"; },
+    needsAuth() { return lastKind === "need-auth" || lastKind === "bad-auth"; },
 
     async connect() {
       cfg = loadCfg();
+      lastKind = "";
       setStatus("connecting", "Connecting " + cfg.host);
       try {
         await fetch("/api/mqtt/config", {
@@ -194,12 +240,23 @@
         wireWs(c);
         return true;
       } catch (wsErr) {
+        const kind = wsErr.fleetKind || classifyErr(wsErr);
+        if (kind === "need-auth" || kind === "bad-auth") {
+          mode = "off";
+          setStatus("offline", authMessage(kind), kind);
+          return false;
+        }
         try {
           await tryBridge();
           return true;
         } catch (brErr) {
+          const bKind = brErr.fleetKind || classifyErr(brErr);
           mode = "off";
-          setStatus("offline", "No MQTT at " + cfg.host + " (WS and TCP bridge failed)");
+          if (bKind === "need-auth" || bKind === "bad-auth") {
+            setStatus("offline", authMessage(bKind), bKind);
+          } else {
+            setStatus("offline", "No MQTT at " + cfg.host + " — enter Automaton user/password", "net");
+          }
           return false;
         }
       }
