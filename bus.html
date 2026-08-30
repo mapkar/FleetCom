@@ -8,7 +8,7 @@
 </head>
 <body>
   <header>
-    <div class="bus-tag" id="bus-tag">ROUTE —</div>
+    <div class="bus-tag" id="bus-tag">Route: —</div>
     <div class="hdr-mid" id="clock"></div>
     <div class="hdr-right">
       <button class="switch" id="switch" type="button">Switch</button>
@@ -52,6 +52,7 @@
   <script>if (!window.mqtt) document.write('<script src="https://unpkg.com/mqtt@4.3.8/dist/mqtt.min.js"><\/script>')</script>
   <script src="mqtt-config.js"></script>
   <script src="fleet-mqtt.js"></script>
+  <script src="fleet-notify.js"></script>
   <script src="fleet-store.js"></script>
   <script src="bus.js"></script>
 </body>

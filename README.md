@@ -7,8 +7,8 @@ Office dashboard and bus kiosk. Roster plus live MQTT through Automaton at `fram
 | `office.html` / `office.css` / `office.js` | Dispatcher dashboard + roster editor |
 | `bus.html` / `bus.css` / `bus.js` | Driver kiosk |
 | `fleet-store.js` | Shared roster load/save |
-| `fleet-mqtt.js` / `mqtt-config.js` | MQTT client (WebSocket, then TCP bridge) |
-| `mqtt.min.js` | Optional local MQTT.js bundle; falls back to unpkg |
+| `fleet-notify.js` | Short ding for incoming messages and driver replies |
+| `fleet-mqtt.js` / `mqtt-config.js` / `mqtt.min.js` | MQTT client (WebSocket, then TCP bridge) |
 | `serve.py` | Static files, roster API, MQTT TCP bridge |
 | `data/roster.json` | Office-maintained bus list |
 | `PROJECT.md` | Design brief, topics, and message catalog |
@@ -19,7 +19,7 @@ Default broker host: **framland.duckdns.org** (Automaton, via DuckDNS).
 
 The browser tries MQTT over WebSocket first (`ws://framland.duckdns.org:9001/mqtt`, then 1884 / 8083 / 8000). If that fails, `serve.py` bridges to MQTT TCP **1883** on the same host.
 
-Click the **MQTT** pill on the office header (or use the bus setup form) to set user/password and ports. Credentials stay in the browser (`localStorage`) and in `data/mqtt.json` on the machine running `serve.py` — that file is gitignored.
+`framland.duckdns.org` answers on TCP **1883** and WebSocket **9001**. Automaton rejects anonymous clients (`CONNACK 5 Not authorized`), so the office MQTT dialog / bus setup form must have the broker username and password. Credentials stay in the browser (`localStorage`) and in `data/mqtt.json` on the machine running `serve.py` — that file is gitignored.
 
 On Automaton / Mosquitto you need:
 
@@ -57,6 +57,12 @@ python3 serve.py
 - Bus:    http://127.0.0.1:8080/bus.html
 
 `serve.py` listens on `0.0.0.0:8080`. A bus tablet on the LAN can use `http://<this-pc-ip>:8080/bus.html` and still reach Automaton through the TCP bridge.
+
+## Live traffic
+
+Office feed starts empty and only shows real MQTT traffic (plus messages you compose). Route labels read **Route: 42**. Delete a route from the selected-assignment card or the edit dialog.
+
+Office shows **Driver confirmed / denied / dismissed** on messages the bus answers. Bus keeps a priority-sorted queue of office messages and dings on each new one. Office dings on a new bus report and again when the driver replies.
 
 ## Roster fields
 
