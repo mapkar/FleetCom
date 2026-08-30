@@ -147,6 +147,14 @@
     getSelected() {
       const id = Store.getSelectedId();
       return id ? Store.find(id) : null;
+    },
+
+    applyRemote(list) {
+      if (!Array.isArray(list)) return roster.slice();
+      roster = list.map(normalize);
+      persistLocal(roster);
+      listeners.forEach((fn) => fn(roster));
+      return roster.slice();
     }
   };
 
