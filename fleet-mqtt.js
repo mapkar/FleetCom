@@ -27,6 +27,7 @@
     localStorage.setItem(STORE, JSON.stringify({
       host: cfg.host,
       wsPort: Number(cfg.wsPort) || 9001,
+      wssPort: Number(cfg.wssPort) || 443,
       wsPath: cfg.wsPath || "/mqtt",
       tcpPort: Number(cfg.tcpPort) || 1883,
       useTLS: !!cfg.useTLS,
@@ -52,10 +53,22 @@
     try { return JSON.parse(s); } catch (_) { return { text: s }; }
   }
 
-  function wsUrl(port) {
-    const proto = cfg.useTLS ? "wss" : "ws";
+  function pageIsHttps() {
+    try { return location.protocol === "https:"; } catch (_) { return false; }
+  }
+
+  function canUseBridge() {
+    try {
+      if (/\.github\.io$/i.test(location.hostname)) return false;
+    } catch (_) {}
+    return true;
+  }
+
+  function wsUrl(port, tls) {
+    const proto = tls ? "wss" : "ws";
     const path = cfg.wsPath && cfg.wsPath.charAt(0) === "/" ? cfg.wsPath : "/" + (cfg.wsPath || "mqtt");
-    return proto + "://" + cfg.host + ":" + port + path;
+    const hidePort = (tls && Number(port) === 443) || (!tls && Number(port) === 80);
+    return proto + "://" + cfg.host + (hidePort ? "" : ":" + port) + path;
   }
 
   function classifyErr(err) {
@@ -66,13 +79,17 @@
       return cfg.username ? "bad-auth" : "need-auth";
     }
     if (/CONNACK refused \(4\)|bad username/i.test(msg)) return "bad-auth";
-    if (!cfg.username && /closed ws:|closed wss:|Connection refused/i.test(msg)) return "need-auth";
+    if (/closed ws:|closed wss:|CONNACK|Not authorized/i.test(msg)) {
+      return cfg.username ? "bad-auth" : "need-auth";
+    }
     return "net";
   }
 
   function authMessage(kind) {
     if (kind === "need-auth") return "Automaton requires an MQTT username and password";
-    if (kind === "bad-auth") return "MQTT username or password was rejected";
+    if (kind === "bad-auth") {
+      return "Automaton rejected user \"" + (cfg.username || "") + "\" (CONNACK 5). Add that user with mosquitto_passwd on the server.";
+    }
     return "";
   }
 
@@ -86,13 +103,13 @@
     emit(topic, payload, false);
   }
 
-  function connectWs(port) {
+  function connectWs(port, tls) {
     return new Promise((resolve, reject) => {
       if (typeof mqtt === "undefined") {
         reject(new Error("mqtt.js missing"));
         return;
       }
-      const url = wsUrl(port);
+      const url = wsUrl(port, tls);
       const opts = {
         clientId: "fleetcom-" + Math.random().toString(16).slice(2, 10),
         reconnectPeriod: 0,
@@ -135,40 +152,48 @@
       c.on("close", () => {
         if (settled) return;
         const e = new Error("closed " + url);
-        if (!cfg.username) e.code = 5;
+        e.code = cfg.username ? 4 : 5;
         finish(e);
       });
     });
   }
 
   async function tryWebSocket() {
-    const ports = [Number(cfg.wsPort) || 9001].concat(cfg.altWsPorts || []);
-    const uniq = [];
-    ports.forEach((p) => { if (uniq.indexOf(p) < 0) uniq.push(p); });
+    const httpsPage = pageIsHttps();
+    const attempts = [];
+    if (httpsPage || cfg.useTLS) {
+      attempts.push({ tls: true, port: Number(cfg.wssPort) || 443, label: "WSS :443" });
+    }
+    if (!httpsPage) {
+      attempts.push({ tls: false, port: Number(cfg.wsPort) || 9001, label: "WS :" + (cfg.wsPort || 9001) });
+    }
     let last = null;
-    for (let i = 0; i < uniq.length; i++) {
-      setStatus("connecting", "WS :" + uniq[i]);
+    for (let i = 0; i < attempts.length; i++) {
+      const a = attempts[i];
+      setStatus("connecting", a.label + " " + cfg.host);
       try {
-        const c = await connectWs(uniq[i]);
-        cfg.wsPort = uniq[i];
+        const c = await connectWs(a.port, a.tls);
+        if (a.tls) cfg.wssPort = a.port;
+        else cfg.wsPort = a.port;
+        cfg.useTLS = a.tls;
         return c;
       } catch (e) {
         last = e;
         const kind = classifyErr(e);
-        if (kind === "need-auth" || kind === "bad-auth") {
-          e.fleetKind = kind;
-          throw e;
-        }
+        e.fleetKind = kind;
+        if (kind === "need-auth" || kind === "bad-auth") throw e;
       }
     }
-    throw last || new Error("no websocket listener");
+    throw last || new Error(httpsPage
+      ? "GitHub Pages needs wss://" + cfg.host + "/mqtt on port 443"
+      : "no websocket listener");
   }
 
   function wireWs(c) {
     client = c;
     mode = "ws";
     c.options.reconnectPeriod = 4000;
-    setStatus("online", "MQTT WS " + cfg.host + ":" + cfg.wsPort, "ok");
+    setStatus("online", (cfg.useTLS ? "MQTT WSS " : "MQTT WS ") + cfg.host + (cfg.useTLS ? "" : ":" + cfg.wsPort), "ok");
     c.subscribe([
       "fleet/buses/+/messages/out",
       "fleet/buses/+/messages/in",
@@ -184,7 +209,7 @@
       if (mode === "ws") setStatus("offline", "MQTT dropped");
     });
     c.on("reconnect", () => setStatus("connecting", "MQTT reconnect"));
-    c.on("connect", () => setStatus("online", "MQTT WS " + cfg.host + ":" + cfg.wsPort, "ok"));
+    c.on("connect", () => setStatus("online", (cfg.useTLS ? "MQTT WSS " : "MQTT WS ") + cfg.host + (cfg.useTLS ? "" : ":" + cfg.wsPort), "ok"));
     c.on("error", (e) => {
       const kind = classifyErr(e);
       if (kind === "need-auth" || kind === "bad-auth") {
@@ -199,7 +224,7 @@
 
   async function tryBridge() {
     let lastErr = new Error("no bridge");
-    for (let i = 0; i < 8; i++) {
+    for (let i = 0; i < 3; i++) {
       let info;
       try {
         const res = await fetch("/api/mqtt/status", { cache: "no-store" });
@@ -289,6 +314,13 @@
           setStatus("offline", authMessage(kind), kind);
           return false;
         }
+        if (!canUseBridge()) {
+          mode = "off";
+          setStatus("offline", pageIsHttps()
+            ? "Pages is HTTPS — Automaton needs wss://" + cfg.host + "/mqtt (open 443 + launch.sh wss)"
+            : "No MQTT WebSocket at " + cfg.host, "net");
+          return false;
+        }
         try {
           await tryBridge();
           return true;
@@ -298,7 +330,9 @@
           if (bKind === "need-auth" || bKind === "bad-auth") {
             setStatus("offline", authMessage(bKind), bKind);
           } else {
-            setStatus("offline", "Reached " + cfg.host + " but MQTT login was refused — enter Automaton user/password", "net");
+            setStatus("offline", cfg.username
+              ? "Automaton rejected MQTT login for \"" + cfg.username + "\""
+              : "Reached " + cfg.host + " but MQTT login was refused — enter Automaton user/password", cfg.username ? "bad-auth" : "net");
           }
           return false;
         }
