@@ -19,7 +19,7 @@
       <div class="pane-h">
         Roster
         <span id="bus-count"></span>
-        <button type="button" id="add-bus">+ Add bus</button>
+        <button type="button" id="add-bus">+ Add route</button>
       </div>
       <div class="bus-list" id="buses"></div>
     </aside>
@@ -28,6 +28,7 @@
       <div class="filters">
         <button class="on" data-f="all">All</button>
         <button data-f="unacked">Unacked</button>
+        <button data-f="replies">Driver replies</button>
         <button data-f="priority">Priority</button>
       </div>
       <div class="feed" id="feed"></div>
@@ -138,6 +139,7 @@
   <script>if (!window.mqtt) document.write('<script src="https://unpkg.com/mqtt@4.3.8/dist/mqtt.min.js"><\/script>')</script>
   <script src="mqtt-config.js"></script>
   <script src="fleet-mqtt.js"></script>
+  <script src="fleet-notify.js"></script>
   <script src="fleet-store.js"></script>
   <script src="office.js"></script>
 </body>
