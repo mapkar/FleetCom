@@ -1,3 +1,0 @@
-FleetCom GitHub write test
-Created: 2026-08-30
-Repo: mapkar/FleetCom
