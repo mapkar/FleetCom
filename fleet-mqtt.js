@@ -60,11 +60,13 @@
 
   function classifyErr(err) {
     const msg = (err && err.message) ? err.message : String(err || "");
-    const code = err && err.code;
+    const code = Number(err && err.code);
     if (code === 4 || /bad user|bad username or password/i.test(msg)) return "bad-auth";
-    if (code === 5 || /not authorized/i.test(msg)) return cfg.username ? "bad-auth" : "need-auth";
+    if (code === 5 || /not authorized|connack refused \(5\)/i.test(msg)) {
+      return cfg.username ? "bad-auth" : "need-auth";
+    }
     if (/CONNACK refused \(4\)|bad username/i.test(msg)) return "bad-auth";
-    if (/CONNACK refused \(5\)|not authorized/i.test(msg)) return cfg.username ? "bad-auth" : "need-auth";
+    if (!cfg.username && /closed ws:|closed wss:|Connection refused/i.test(msg)) return "need-auth";
     return "net";
   }
 
@@ -76,8 +78,9 @@
 
   function handlePacket(topic, payload) {
     if (payload && payload.msg_id) {
-      if (seen.has(payload.msg_id)) return;
-      seen.add(payload.msg_id);
+      const key = payload.msg_id + "|" + (payload.status || "") + "|" + topic;
+      if (seen.has(key)) return;
+      seen.add(key);
       if (seen.size > 400) seen = new Set(Array.from(seen).slice(-200));
     }
     emit(topic, payload, false);
@@ -115,9 +118,25 @@
       };
       const t = setTimeout(() => finish(new Error("timeout " + url)), 6000);
       c.on("connect", () => finish(null, c));
-      c.on("error", (e) => finish(e || new Error("MQTT error at " + url)));
+      c.on("packetreceive", (packet) => {
+        if (!packet || packet.cmd !== "connack") return;
+        const rc = packet.returnCode != null ? packet.returnCode : packet.reasonCode;
+        if (rc) {
+          const e = new Error("CONNACK refused (" + rc + ")");
+          e.code = rc;
+          finish(e);
+        }
+      });
+      c.on("error", (e) => {
+        const err = e || new Error("MQTT error at " + url);
+        if (e && e.code != null) err.code = e.code;
+        finish(err);
+      });
       c.on("close", () => {
-        if (!settled) finish(new Error("closed " + url));
+        if (settled) return;
+        const e = new Error("closed " + url);
+        if (!cfg.username) e.code = 5;
+        finish(e);
       });
     });
   }
@@ -174,17 +193,41 @@
     });
   }
 
+  function sleep(ms) {
+    return new Promise((r) => setTimeout(r, ms));
+  }
+
   async function tryBridge() {
-    const res = await fetch("/api/mqtt/status", { cache: "no-store" });
-    if (!res.ok) throw new Error("no bridge");
-    const info = await res.json();
-    if (!info.connected) {
+    let lastErr = new Error("no bridge");
+    for (let i = 0; i < 8; i++) {
+      let info;
+      try {
+        const res = await fetch("/api/mqtt/status", { cache: "no-store" });
+        if (!res.ok) throw new Error("no bridge");
+        info = await res.json();
+      } catch (e) {
+        lastErr = e;
+        await sleep(700);
+        continue;
+      }
+      if (info.connected) {
+        mode = "bridge";
+        setStatus("online", "MQTT via serve.py → " + (info.host || cfg.host) + ":" + (info.port || cfg.tcpPort), "ok");
+        startBridgePoll();
+        return;
+      }
       const err = new Error(info.error || "bridge offline");
-      err.fleetKind = classifyErr(err);
-      throw err;
+      const kind = classifyErr(err);
+      err.fleetKind = kind;
+      lastErr = err;
+      if (kind === "need-auth" || kind === "bad-auth") throw err;
+      setStatus("connecting", i ? "TCP bridge retry" : "TCP bridge via serve.py");
+      await sleep(700);
     }
-    mode = "bridge";
-    setStatus("online", "MQTT via serve.py → " + (info.host || cfg.host) + ":" + (info.port || cfg.tcpPort), "ok");
+    throw lastErr;
+  }
+
+  function startBridgePoll() {
     if (bridgeTimer) clearInterval(bridgeTimer);
     let since = 0;
     async function pull() {
@@ -201,7 +244,7 @@
         }
       } catch (_) {}
     }
-    await pull();
+    pull();
     bridgeTimer = setInterval(pull, 1200);
   }
 
@@ -255,7 +298,7 @@
           if (bKind === "need-auth" || bKind === "bad-auth") {
             setStatus("offline", authMessage(bKind), bKind);
           } else {
-            setStatus("offline", "No MQTT at " + cfg.host + " — enter Automaton user/password", "net");
+            setStatus("offline", "Reached " + cfg.host + " but MQTT login was refused — enter Automaton user/password", "net");
           }
           return false;
         }
