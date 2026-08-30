@@ -84,6 +84,8 @@ fleet/
 └── system/heartbeat
 ```
 
+Broker: Automaton at `framland.duckdns.org` (WebSocket, or TCP 1883 via `serve.py`).
+
 ## JSON message shape (required fields)
 
 `msg_id`, `timestamp` (ISO 8601 UTC), `sender`, `direction` (`bus_to_office` | `office_to_bus`), `priority`, `category`, `type`
@@ -96,7 +98,6 @@ QoS 1 for operational messages. Retain latest status and location.
 
 - GPS map of buses
 - Live travel / location view for office
-- MQTT.js wiring to a local Mosquitto broker
 - Meshtastic MQTT bridge
 - Physical 4-button keypad under the screen for ACK/Deny/Dismiss/select while driving
 
@@ -123,4 +124,4 @@ Stored in `data/roster.json` when served with `serve.py`. Bus kiosk picks from t
 
 ## Current status
 
-Office and bus HTML mocks exist. Shared roster via `fleet-store.js` + `serve.py`. No live MQTT yet.
+Office and bus UIs plus roster. Live MQTT via Automaton at `framland.duckdns.org` (`fleet-mqtt.js` WebSocket, `serve.py` TCP 1883 bridge).
