@@ -47,6 +47,11 @@ header {
   border: 1px solid #2a4a38;
 }
 .pill.warn { background: #2a220e; color: var(--amber); border-color: #5a4a18; }
+.pill.mqtt { cursor: pointer; }
+.pill.mqtt.online { background: #1a2a22; color: var(--green); border-color: #2a4a38; }
+.pill.mqtt.connecting { background: #2a220e; color: var(--amber); border-color: #5a4a18; }
+.pill.mqtt.offline { background: #2a1418; color: var(--red); border-color: #6a2a30; }
+.chk { display: flex; align-items: center; gap: 8px; font-size: 13px; text-transform: none; letter-spacing: 0; color: var(--text); }
 main {
   flex: 1;
   display: grid;
