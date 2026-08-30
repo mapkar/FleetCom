@@ -5,7 +5,7 @@
   const STORE = "fleetcom.mqtt";
   const listeners = { status: new Set(), message: new Set() };
   let client = null;
-  let mode = "off";
+  let mode = "off"; /* off | ws | bridge */
   let status = "offline";
   let statusText = "MQTT off";
   let cfg = loadCfg();
@@ -57,6 +57,7 @@
   }
 
   function handlePacket(topic, payload) {
+    const key = topic + "|" + (payload && payload.msg_id ? payload.msg_id : JSON.stringify(payload).slice(0, 80));
     if (payload && payload.msg_id) {
       if (seen.has(payload.msg_id)) return;
       seen.add(payload.msg_id);
