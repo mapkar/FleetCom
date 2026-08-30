@@ -205,8 +205,8 @@
       font-size: 12px;
     }
     .sel-card strong { display: block; font-size: 14px; margin-bottom: 4px; }
+    .sel-card .sel-actions { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
     .sel-card button {
-      margin-top: 8px;
       background: var(--bg-3);
       color: var(--text);
       border: 1px solid var(--line);
@@ -215,6 +215,7 @@
       cursor: pointer;
       font-size: 12px;
     }
+    .sel-card button.danger { color: var(--red); border-color: #5a3030; }
     .toast {
       position: fixed;
       bottom: 16px;

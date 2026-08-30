@@ -81,6 +81,14 @@
     .pri.normal { color: var(--blue); }
     .banner h2 { font-size: 20px; margin: 6px 0 4px; font-weight: 700; }
     .banner p { font-size: 13px; color: var(--muted); }
+    .qcount {
+      margin-top: 8px;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--amber);
+    }
+    .qlist { margin-top: 6px; font-size: 12px; color: var(--muted); }
+    .qlist div { padding: 2px 0; }
     .row3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 12px; }
     .row3 button, .cat, .type-btn, .back, .pick { font: inherit; border: 0; cursor: pointer; }
     .row3 button {

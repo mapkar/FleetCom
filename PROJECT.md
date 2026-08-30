@@ -31,7 +31,7 @@ Inspired by **ACARS**: short, structured, priority-aware messages with acknowled
 
 ## Bus UI
 
-- Top status bar: route number + connection/power
+- Top status bar: bus ID + connection/power
 - Pending office message banner with three large buttons: **ACK / Deny / Dismiss**
 - Bottom 3×2 grid of large category buttons
 - Category tap opens a short list of pre-written messages (no free text while moving)
@@ -84,8 +84,6 @@ fleet/
 └── system/heartbeat
 ```
 
-Broker: Automaton at `framland.duckdns.org` (WebSocket, or TCP 1883 via `serve.py`).
-
 ## JSON message shape (required fields)
 
 `msg_id`, `timestamp` (ISO 8601 UTC), `sender`, `direction` (`bus_to_office` | `office_to_bus`), `priority`, `category`, `type`
@@ -98,6 +96,7 @@ QoS 1 for operational messages. Retain latest status and location.
 
 - GPS map of buses
 - Live travel / location view for office
+- MQTT.js wiring to a local Mosquitto broker
 - Meshtastic MQTT bridge
 - Physical 4-button keypad under the screen for ACK/Deny/Dismiss/select while driving
 
@@ -116,7 +115,7 @@ QoS 1 for operational messages. Retain latest status and location.
 Each assignment:
 
 - `state_number` — SC format `508-6238`
-- `route_number` (primary label in the UI)
+- `route_number`
 - `driver_name`
 - `comment`
 
@@ -124,4 +123,4 @@ Stored in `data/roster.json` when served with `serve.py`. Bus kiosk picks from t
 
 ## Current status
 
-Office and bus UIs plus roster. Live MQTT via Automaton at `framland.duckdns.org` (`fleet-mqtt.js` WebSocket, `serve.py` TCP 1883 bridge).
+Office and bus UIs plus roster. Live MQTT via Automaton at `framland.duckdns.org` (`fleet-mqtt.js` WebSocket, `serve.py` TCP 1883 bridge). Feed is live-only (no demo messages). Bus queues multiple office messages. Office shows driver ACK / Deny / Dismiss. Web Audio ding on new traffic.
