@@ -1,59 +1,66 @@
-# FleetCom mocks
+# FleetCom
 
-Office dashboard and bus kiosk. Shared roster, demo messages. No MQTT yet.
+Office dashboard and bus kiosk. Roster plus live MQTT through Automaton at `framland.duckdns.org`.
 
 | File | What it is |
 |---|---|
 | `office.html` / `office.css` / `office.js` | Dispatcher dashboard + roster editor |
-| `bus.html` / `bus.css` / `bus.js` | Driver kiosk — pick assignment, then category grid |
+| `bus.html` / `bus.css` / `bus.js` | Driver kiosk |
 | `fleet-store.js` | Shared roster load/save |
-| `serve.py` | Local server that persists `data/roster.json` |
+| `fleet-mqtt.js` / `mqtt-config.js` | MQTT client (WebSocket, then TCP bridge) |
+| `mqtt.min.js` | Optional local MQTT.js bundle; falls back to unpkg |
+| `serve.py` | Static files, roster API, MQTT TCP bridge |
 | `data/roster.json` | Office-maintained bus list |
 | `PROJECT.md` | Design brief, topics, and message catalog |
 
-## Roster fields
+## MQTT
 
-Each assignment the office creates has:
+Default broker host: **framland.duckdns.org** (Automaton, via DuckDNS).
 
-- **State bus number** — South Carolina format `508-6238` (3 digits, hyphen, 4 digits)
-- **Route number** (primary label in the UI)
-- **Driver name**
-- **Comment**
+The browser tries MQTT over WebSocket first (`ws://framland.duckdns.org:9001/mqtt`, then 1884 / 8083 / 8000). If that fails, `serve.py` bridges to MQTT TCP **1883** on the same host.
 
-The bus kiosk only offers buses that are on this list. Drivers do not type a bus number.
+Click the **MQTT** pill on the office header (or use the bus setup form) to set user/password and ports. Credentials stay in the browser (`localStorage`) and in `data/mqtt.json` on the machine running `serve.py` — that file is gitignored.
+
+On Automaton / Mosquitto you need:
+
+1. TCP 1883 reachable from the PC running `serve.py` (LAN or port-forward to `framland.duckdns.org`)
+2. Optional WebSocket listener if you want the tablet to talk to the broker without `serve.py`:
+
+```
+listener 9001
+protocol websockets
+```
+
+Allow topic `fleet/#` for the FleetCom clients.
+
+### Topics in use
+
+```
+fleet/office/roster              retained JSON roster
+fleet/office/broadcast           office → all buses
+fleet/buses/{id}/messages/out    bus → office
+fleet/buses/{id}/messages/in     office → one bus
+fleet/buses/{id}/ack             ACK / Deny / Dismiss
+fleet/buses/{id}/status          retained online/offline
+fleet/system/heartbeat
+```
+
+QoS 1 on operational messages.
 
 ## Serve locally (Linux)
-
-Use the project server so office and a tablet on the same machine/LAN share one roster file:
 
 ```bash
 python3 serve.py
 ```
 
-Then open:
-
 - Office: http://127.0.0.1:8080/office.html
 - Bus:    http://127.0.0.1:8080/bus.html
 
-`serve.py` listens on `0.0.0.0:8080`, so a bus tablet can use `http://<this-pc-ip>:8080/bus.html`.
+`serve.py` listens on `0.0.0.0:8080`. A bus tablet on the LAN can use `http://<this-pc-ip>:8080/bus.html` and still reach Automaton through the TCP bridge.
 
-If you only run `python3 -m http.server 8080`, the roster stays in the browser (`localStorage`) and will not write `data/roster.json`. Fine for a single-browser demo; use `serve.py` when the office list should survive and be visible on another device.
+## Roster fields
 
-## How it behaves
-
-**Office**
-
-- Left list is the roster (route first, then driver and state number)
-- **+ Add bus** or double-click a row to edit
-- State number is checked against `###-####`
-- Center feed: All / Unacked / Priority; ACK / Deny / Dismiss
-- Right panel: send to one assignment or broadcast
-
-**Bus**
-
-- First launch: choose route from the office list
-- Choice is remembered on that device until **Switch**
-- Pending office message: ACK / Deny / Dismiss
-- Category tap → pre-written types only (no free text)
-
-Message feed state is still in-memory for the session. The roster is what persists.
+- **Route number** (primary label)
+- **Driver name**
+- **State bus number** — SC format `508-6238`
+- **Comment**

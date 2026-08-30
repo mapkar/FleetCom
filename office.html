@@ -11,6 +11,7 @@
     <div class="logo">FLEETCOM <span>Office</span></div>
     <div class="clock" id="clock"></div>
     <div class="spacer"></div>
+    <div class="pill mqtt connecting" id="mqtt-pill" title="MQTT settings">MQTT…</div>
     <div class="pill" id="src-pill">Roster</div>
   </header>
   <main>
@@ -96,6 +97,46 @@
       </div>
     </form>
   </div>
+  <div class="mask" id="mqtt-mask">
+    <form class="dlg" id="mqtt-form">
+      <h2>MQTT — Automaton</h2>
+      <div class="field">
+        <label for="m-host">Broker host</label>
+        <input type="text" id="m-host" />
+        <div class="hint">DDNS: framland.duckdns.org</div>
+      </div>
+      <div class="field">
+        <label for="m-ws">WebSocket port</label>
+        <input type="text" id="m-ws" />
+      </div>
+      <div class="field">
+        <label for="m-path">WebSocket path</label>
+        <input type="text" id="m-path" />
+      </div>
+      <div class="field">
+        <label for="m-tcp">TCP port (serve.py bridge)</label>
+        <input type="text" id="m-tcp" />
+      </div>
+      <div class="field">
+        <label for="m-user">Username (optional)</label>
+        <input type="text" id="m-user" autocomplete="off" />
+      </div>
+      <div class="field">
+        <label for="m-pass">Password (optional)</label>
+        <input type="password" id="m-pass" autocomplete="off" />
+      </div>
+      <label class="chk"><input type="checkbox" id="m-tls" /> Use TLS (wss / 8883)</label>
+      <div class="err" id="m-err"></div>
+      <div class="dlg-row">
+        <button type="button" class="ghost" id="m-cancel">Cancel</button>
+        <button type="submit" class="save">Save & connect</button>
+      </div>
+    </form>
+  </div>
+  <script src="mqtt.min.js"></script>
+  <script>if (!window.mqtt) document.write('<script src="https://unpkg.com/mqtt@4.3.8/dist/mqtt.min.js"><\/script>')</script>
+  <script src="mqtt-config.js"></script>
+  <script src="fleet-mqtt.js"></script>
   <script src="fleet-store.js"></script>
   <script src="office.js"></script>
 </body>
