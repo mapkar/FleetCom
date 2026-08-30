@@ -1,0 +1,44 @@
+[
+  {
+    "id": "42",
+    "state_number": "508-6238",
+    "route_number": "42",
+    "driver_name": "M. Hayes",
+    "comment": "Seneca HS AM"
+  },
+  {
+    "id": "17",
+    "state_number": "508-6104",
+    "route_number": "17",
+    "driver_name": "R. Owens",
+    "comment": "Walhalla ES"
+  },
+  {
+    "id": "08",
+    "state_number": "508-5881",
+    "route_number": "8",
+    "driver_name": "T. Cannon",
+    "comment": "West-Oak MS — spare radio 2"
+  },
+  {
+    "id": "23",
+    "state_number": "508-6019",
+    "route_number": "23",
+    "driver_name": "L. Grant",
+    "comment": "Tamassee-Salem"
+  },
+  {
+    "id": "31",
+    "state_number": "508-6144",
+    "route_number": "31",
+    "driver_name": "C. Briggs",
+    "comment": "Ravenel ES"
+  },
+  {
+    "id": "05",
+    "state_number": "508-5722",
+    "route_number": "5",
+    "driver_name": "A. Pruitt",
+    "comment": "Blue Ridge"
+  }
+]
