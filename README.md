@@ -10,6 +10,9 @@ Office dashboard and bus kiosk. Roster plus live MQTT through Automaton at `fram
 | `fleet-notify.js` | Short ding for incoming messages and driver replies |
 | `fleet-mqtt.js` / `mqtt-config.js` / `mqtt.min.js` | MQTT client (WebSocket, then TCP bridge) |
 | `serve.py` | Static files, roster API, MQTT TCP bridge |
+| `launch.sh` | Automaton install / git update / WSS listener |
+| `data/mqtt.example.json` | Template for server-side MQTT config |
+| `data/mqtt.json` | Live creds on the server only (gitignored) |
 | `data/roster.json` | Office-maintained bus list |
 | `PROJECT.md` | Design brief, topics, and message catalog |
 
@@ -17,21 +20,25 @@ Office dashboard and bus kiosk. Roster plus live MQTT through Automaton at `fram
 
 Default broker host: **framland.duckdns.org** (Automaton, via DuckDNS).
 
-The browser tries MQTT over WebSocket first (`ws://framland.duckdns.org:9001/mqtt`, then 1884 / 8083 / 8000). If that fails, `serve.py` bridges to MQTT TCP **1883** on the same host.
+**Credentials are not in the repo.** On Automaton (or any host running `serve.py`):
 
-`framland.duckdns.org` answers on TCP **1883** and WebSocket **9001**. Automaton rejects anonymous clients (`CONNACK 5 Not authorized`), so the office MQTT dialog / bus setup form must have the broker username and password. Credentials stay in the browser (`localStorage`) and in `data/mqtt.json` on the machine running `serve.py` — that file is gitignored.
-
-On Automaton / Mosquitto you need:
-
-1. TCP 1883 reachable from the PC running `serve.py` (LAN or port-forward to `framland.duckdns.org`)
-2. Optional WebSocket listener if you want the tablet to talk to the broker without `serve.py`:
-
-```
-listener 9001
-protocol websockets
+```bash
+cp data/mqtt.example.json data/mqtt.json
+# edit password (and optional letsencrypt_email)
+sudo bash launch.sh          # first time
+sudo bash launch.sh update   # later git pull + restart
+sudo bash launch.sh wss      # HTTPS + wss://…/mqtt for GitHub Pages
+sudo bash launch.sh creds    # re-apply data/mqtt.json to Mosquitto
 ```
 
-Allow topic `fleet/#` for the FleetCom clients.
+`data/mqtt.json` is gitignored. The browser still keeps whatever you type in the MQTT dialog (`localStorage`) so a tablet can connect without reading the server file.
+
+- From **HTTP** (Apache `/acars/` or `serve.py :8080`): `ws://framland.duckdns.org:9001/mqtt`, then the `serve.py` TCP bridge.
+- From **HTTPS GitHub Pages**: only `wss://framland.duckdns.org/mqtt` (port 443). Plain `ws://` is blocked as mixed content, and Pages has no `/api` bridge.
+
+That WSS listener is Apache on Automaton: TLS on 443, proxy `/mqtt` to Mosquitto WebSocket on `127.0.0.1:9001`. The house router must forward **TCP 443**.
+
+Automaton rejects anonymous MQTT (`CONNACK 5`). Use the username/password from `data/mqtt.json`. Allow topic `fleet/#` for that user.
 
 ### Topics in use
 

@@ -123,4 +123,4 @@ Stored in `data/roster.json` when served with `serve.py`. Bus kiosk picks from t
 
 ## Current status
 
-Office and bus UIs plus roster. Live MQTT via Automaton at `framland.duckdns.org` (`fleet-mqtt.js` WebSocket, `serve.py` TCP 1883 bridge). Feed is live-only (no demo messages). Bus queues multiple office messages. Office shows driver ACK / Deny / Dismiss. Web Audio ding on new traffic.
+Office and bus UIs plus roster. Live MQTT via Automaton at `framland.duckdns.org` (`fleet-mqtt.js` WebSocket / WSS, `serve.py` TCP 1883 bridge). Credentials live in gitignored `data/mqtt.json` on the server and in browser localStorage — not in the repo. GitHub Pages (`https://mapkar.github.io/FleetCom/`) needs `wss://framland.duckdns.org/mqtt` on port 443 (`sudo bash launch.sh wss` plus router forward). Feed is live-only (no demo messages). Bus queues multiple office messages. Office shows driver ACK / Deny / Dismiss. Web Audio ding on new traffic.
