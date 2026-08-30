@@ -1,0 +1,12 @@
+{
+  "host": "framland.duckdns.org",
+  "port": 1883,
+  "username": "fleet",
+  "password": "CHANGE-ME",
+  "client_id": "fleetcom-bridge",
+  "ws_port": 9001,
+  "wss_port": 443,
+  "ws_path": "/mqtt",
+  "domain": "framland.duckdns.org",
+  "letsencrypt_email": ""
+}
