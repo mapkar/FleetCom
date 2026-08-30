@@ -48,9 +48,53 @@
       ]}
     ];
 
-    let incoming = null;
+    const QKEY = "fleetcom.bus.queue";
+    let queue = [];
+
+    function loadQueue() {
+      try {
+        const raw = sessionStorage.getItem(QKEY);
+        const list = raw ? JSON.parse(raw) : [];
+        queue = Array.isArray(list) ? list.filter(m => m && m.msg_id) : [];
+      } catch (_) { queue = []; }
+    }
+    function saveQueue() {
+      try { sessionStorage.setItem(QKEY, JSON.stringify(queue.slice(0, 40))); } catch (_) {}
+    }
+
+    function priRank(p) {
+      return p === "emergency" ? 0 : p === "high" ? 1 : 2;
+    }
+    function pendingQueue() {
+      return queue.filter(m => m.status === "pending").sort((a, b) => {
+        const d = priRank(a.priority) - priRank(b.priority);
+        if (d) return d;
+        return new Date(a.timestamp) - new Date(b.timestamp);
+      });
+    }
+    function currentIncoming() {
+      return pendingQueue()[0] || null;
+    }
+
+    function enqueueOffice(msg) {
+      if (!msg || !msg.msg_id) return false;
+      const i = queue.findIndex(x => x.msg_id === msg.msg_id);
+      if (i >= 0) {
+        const prev = queue[i].status;
+        queue[i] = Object.assign({}, queue[i], msg);
+        saveQueue();
+        return queue[i].status === "pending" && prev !== "pending";
+      }
+      queue.push(Object.assign({ status: "pending" }, msg));
+      saveQueue();
+      return (msg.status || "pending") === "pending";
+    }
 
     function current() { return FleetStore.getSelected(); }
+    function routeLabel(b) {
+      if (!b) return "Route: —";
+      return "Route: " + b.route_number;
+    }
 
     function clock() {
       document.getElementById("clock").textContent = new Date().toLocaleString("en-US", {
@@ -62,31 +106,38 @@
       const b = current();
       const el = document.getElementById("bus-tag");
       if (!b) {
-        el.textContent = "ROUTE —";
+        el.textContent = "Route: —";
         document.title = "FleetCom — Bus";
         return;
       }
-      el.innerHTML = "Rt " + b.route_number + " <small>" + (b.driver_name || "No driver") + " · " + b.state_number + "</small>";
-      document.title = "FleetCom — Rt " + b.route_number;
+      el.innerHTML = routeLabel(b) + " <small>" + (b.driver_name || "No driver") + " · " + b.state_number + "</small>";
+      document.title = "FleetCom — " + routeLabel(b);
     }
 
     function renderBanner() {
       const el = document.getElementById("banner");
-      if (!incoming || incoming.status !== "pending") {
+      const incoming = currentIncoming();
+      const waiting = pendingQueue();
+      if (!incoming) {
         el.className = "banner empty";
         el.textContent = "No pending office message";
         return;
       }
+      const rest = waiting.slice(1);
       el.className = "banner " + incoming.priority;
       el.innerHTML = `
-        <div class="from">Office · pending <span class="pri ${incoming.priority}">${incoming.priority}</span></div>
-        <h2>${incoming.text}</h2>
-        <p>${incoming.type.replaceAll("_", " ")}</p>
+        <div class="from">Office · ${waiting.length} queued <span class="pri ${incoming.priority}">${incoming.priority}</span></div>
+        <h2>${incoming.text || (incoming.type || "").replaceAll("_", " ")}</h2>
+        <p>${(incoming.type || "").replaceAll("_", " ")}</p>
         <div class="row3">
           <button class="ack" data-act="acked">ACK</button>
           <button class="deny" data-act="denied">Deny</button>
           <button class="dismiss" data-act="dismissed">Dismiss</button>
-        </div>`;
+        </div>
+        ${rest.length ? `<div class="qcount">${rest.length} more waiting</div>
+          <div class="qlist">${rest.slice(0, 4).map(m =>
+            `<div>${m.priority === "emergency" ? "EM · " : m.priority === "high" ? "HI · " : ""}${m.text || (m.type || "").replaceAll("_", " ")}</div>`
+          ).join("")}</div>` : ""}`;
     }
 
     function renderCats() {
@@ -126,13 +177,13 @@
         : "From the office roster on this browser";
       const box = document.getElementById("setup-list");
       if (!list.length) {
-        box.innerHTML = `<div class="empty-roster">No buses on the roster yet.<br>Add assignments in the office dashboard, then come back here.</div>`;
+        box.innerHTML = `<div class="empty-roster">No routes on the roster yet.<br>Add assignments in the office dashboard, then come back here.</div>`;
         return;
       }
       const sel = FleetStore.getSelectedId();
       box.innerHTML = list.map(b => `
         <button class="pick" data-id="${b.id}">
-          <div class="rt">Route ${b.route_number}</div>
+          <div class="rt">${routeLabel(b)}</div>
           <div class="dr">${b.driver_name || "No driver listed"}</div>
           <div class="sn">${b.state_number}${b.comment ? " · " + b.comment : ""}${b.id === sel ? " · current" : ""}</div>
         </button>`).join("");
@@ -158,7 +209,6 @@
 
     function applySelection(id) {
       FleetStore.setSelectedId(id);
-      if (incoming) incoming.bus_id = id;
       renderHeader();
       showSetup(false);
       publishStatus();
@@ -166,12 +216,23 @@
 
     document.getElementById("banner").addEventListener("click", e => {
       const btn = e.target.closest("button[data-act]");
+      const incoming = currentIncoming();
       if (!btn || !incoming) return;
       incoming.status = btn.dataset.act;
+      saveQueue();
       const bus = current();
       if (bus) {
         FleetMQTT.publish("fleet/buses/" + bus.id + "/ack", {
-          msg_id: incoming.msg_id, status: incoming.status, timestamp: new Date().toISOString(), bus_id: bus.id
+          msg_id: incoming.msg_id,
+          status: incoming.status,
+          timestamp: new Date().toISOString(),
+          bus_id: bus.id,
+          sender: "bus-" + bus.id,
+          direction: "office_to_bus",
+          text: incoming.text,
+          type: incoming.type,
+          category: incoming.category,
+          priority: incoming.priority
         }, { qos: 1 });
       }
       renderBanner();
@@ -207,7 +268,7 @@
       });
       const ok = FleetMQTT.publish("fleet/buses/" + bus.id + "/messages/out", payload, { qos: 1 });
       closeSheet();
-      flashSent((ok ? "" : "offline · ") + "Rt " + bus.route_number + " · " + btn.textContent);
+      flashSent((ok ? "" : "offline · ") + routeLabel(bus) + " · " + btn.textContent);
     });
     document.getElementById("switch").addEventListener("click", () => showSetup(true));
     document.getElementById("setup-list").addEventListener("click", e => {
@@ -241,14 +302,18 @@
       if (!bus || !payload) return;
       if (topic === "fleet/office/broadcast" || topic === "fleet/buses/" + bus.id + "/messages/in") {
         if (payload.direction === "office_to_bus" || payload.sender === "office") {
-          incoming = payload;
-          incoming.status = incoming.status || "pending";
+          const fresh = enqueueOffice(payload);
           renderBanner();
+          if (fresh) FleetNotify.incoming(payload.priority || "normal");
         }
       }
-      if (topic === "fleet/buses/" + bus.id + "/ack" && incoming && payload.msg_id === incoming.msg_id) {
-        incoming.status = payload.status;
-        renderBanner();
+      if (topic === "fleet/buses/" + bus.id + "/ack" && payload.msg_id) {
+        const hit = queue.find(m => m.msg_id === payload.msg_id);
+        if (hit && payload.status) {
+          hit.status = payload.status;
+          saveQueue();
+          renderBanner();
+        }
       }
     });
 
@@ -265,6 +330,7 @@
       publishStatus();
     });
 
+    loadQueue();
     renderCats();
     renderBanner();
     clock();
