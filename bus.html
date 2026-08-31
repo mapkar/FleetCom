@@ -8,17 +8,23 @@
 </head>
 <body>
   <header>
-    <div class="bus-tag" id="bus-tag">Route: —</div>
-    <div class="hdr-mid" id="clock"></div>
-    <div class="hdr-right">
-      <button class="switch" id="switch" type="button">Switch</button>
-      <span class="link wait" id="link">MQTT</span>
-      <span class="batt" id="batt">84%</span>
-    </div>
+    <div class="logo">FLEETCOM <span>Bus</span></div>
+    <div class="clock" id="clock"></div>
+    <div class="spacer"></div>
+    <button class="switch" id="switch" type="button">Switch</button>
+    <span class="pill mqtt connecting" id="link">MQTT…</span>
   </header>
 
+  <div class="ident" id="ident">
+    <div class="ident-route" id="ident-route">Route: —</div>
+    <div class="ident-sub" id="ident-sub">Pick a route from the office roster</div>
+  </div>
+
   <div class="banner" id="banner"></div>
-  <div class="sent" id="sent"></div>
+  <div class="slot idle" id="slot">
+    <div class="slot-k" id="slot-k">Ready</div>
+    <div class="slot-s" id="slot-s">No outgoing report yet</div>
+  </div>
 
   <div class="grid-wrap">
     <div class="cats" id="cats"></div>

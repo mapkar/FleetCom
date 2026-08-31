@@ -55,6 +55,15 @@
       } else {
         beep(494, 0.08, "sine", 0.06, 0);
       }
+    },
+    link: function (online) {
+      if (online) {
+        beep(660, 0.08, "sine", 0.1, 0);
+        beep(880, 0.16, "sine", 0.1, 0.1);
+      } else {
+        beep(494, 0.1, "triangle", 0.09, 0);
+        beep(330, 0.2, "triangle", 0.09, 0.12);
+      }
     }
   };
 })(window);
