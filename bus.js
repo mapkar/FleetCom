@@ -49,7 +49,10 @@
     ];
 
     const QKEY = "fleetcom.bus.queue";
+    const OUTKEY = "fleetcom.bus.outbox";
     let queue = [];
+    let outbox = [];
+    let lastLink = "";
 
     function loadQueue() {
       try {
@@ -60,6 +63,16 @@
     }
     function saveQueue() {
       try { sessionStorage.setItem(QKEY, JSON.stringify(queue.slice(0, 40))); } catch (_) {}
+    }
+    function loadOutbox() {
+      try {
+        const raw = sessionStorage.getItem(OUTKEY);
+        const list = raw ? JSON.parse(raw) : [];
+        outbox = Array.isArray(list) ? list.filter(m => m && m.msg_id) : [];
+      } catch (_) { outbox = []; }
+    }
+    function saveOutbox() {
+      try { sessionStorage.setItem(OUTKEY, JSON.stringify(outbox.slice(0, 40))); } catch (_) {}
     }
 
     function priRank(p) {
@@ -102,16 +115,56 @@
       });
     }
 
+    function officeLabel(status) {
+      if (status === "acked") return "Office approved";
+      if (status === "denied") return "Office denied";
+      if (status === "dismissed") return "Office dismissed";
+      return "Waiting on office";
+    }
+
     function renderHeader() {
       const b = current();
-      const el = document.getElementById("bus-tag");
+      const routeEl = document.getElementById("ident-route");
+      const subEl = document.getElementById("ident-sub");
       if (!b) {
-        el.textContent = "Route: —";
+        routeEl.textContent = "Route: —";
+        subEl.textContent = "Pick a route from the office roster";
         document.title = "FleetCom — Bus";
         return;
       }
-      el.innerHTML = routeLabel(b) + " <small>" + (b.driver_name || "No driver") + " · " + b.state_number + "</small>";
+      routeEl.textContent = routeLabel(b);
+      subEl.textContent = (b.driver_name || "No driver") + " · " + b.state_number;
       document.title = "FleetCom — " + routeLabel(b);
+    }
+
+    function renderSlot() {
+      const el = document.getElementById("slot");
+      const k = document.getElementById("slot-k");
+      const s = document.getElementById("slot-s");
+      const latest = outbox.find(m => !m.offline && (!m.status || m.status === "pending")) || outbox[0];
+      if (!latest) {
+        el.className = "slot idle";
+        k.textContent = "Ready";
+        s.textContent = "No outgoing report yet";
+        return;
+      }
+      const waiting = outbox.filter(m => !m.status || m.status === "pending").length;
+      const label = latest.text || (latest.type || "").replaceAll("_", " ");
+      if (latest.offline) {
+        el.className = "slot offline";
+        k.textContent = "Not sent · MQTT offline";
+        s.textContent = label;
+        return;
+      }
+      if (!latest.status || latest.status === "pending") {
+        el.className = "slot wait";
+        k.textContent = "Sent · waiting on office";
+        s.textContent = label + (waiting > 1 ? " · " + waiting + " open" : "");
+        return;
+      }
+      el.className = "slot " + latest.status;
+      k.textContent = officeLabel(latest.status);
+      s.textContent = label;
     }
 
     function renderBanner() {
@@ -163,11 +216,13 @@
       document.getElementById("cats").style.display = "grid";
     }
 
-    function flashSent(text) {
-      const el = document.getElementById("sent");
-      el.style.display = "block";
-      el.textContent = "Sent · " + text;
-      setTimeout(() => { el.style.display = "none"; }, 2200);
+    function rememberOut(msg, extra) {
+      const row = Object.assign({}, msg, extra || {});
+      const i = outbox.findIndex(x => x.msg_id === row.msg_id);
+      if (i >= 0) outbox[i] = Object.assign({}, outbox[i], row);
+      else outbox.unshift(row);
+      saveOutbox();
+      renderSlot();
     }
 
     function renderSetup() {
@@ -236,7 +291,6 @@
         }, { qos: 1 });
       }
       renderBanner();
-      flashSent("office message " + incoming.status);
     });
     document.getElementById("cats").addEventListener("click", e => {
       const btn = e.target.closest(".cat");
@@ -268,7 +322,7 @@
       });
       const ok = FleetMQTT.publish("fleet/buses/" + bus.id + "/messages/out", payload, { qos: 1 });
       closeSheet();
-      flashSent((ok ? "" : "offline · ") + routeLabel(bus) + " · " + btn.textContent);
+      rememberOut(payload, { offline: !ok });
     });
     document.getElementById("switch").addEventListener("click", () => showSetup(true));
     document.getElementById("setup-list").addEventListener("click", e => {
@@ -286,11 +340,14 @@
 
     FleetMQTT.onStatus((s, text) => {
       const el = document.getElementById("link");
-      el.className = "link " + (s === "online" ? "" : s === "connecting" ? "wait" : "off");
-      el.textContent = s === "online" ? "MQTT" : (s === "connecting" ? "WAIT" : "OFF");
+      el.className = "pill mqtt " + (s === "online" ? "online" : s === "connecting" ? "connecting" : "offline");
+      el.textContent = s === "online" ? "MQTT" : (s === "connecting" ? "MQTT…" : "MQTT off");
       el.title = text;
       const hint = document.getElementById("mqtt-hint");
       if (hint) hint.textContent = text;
+      if (s === "online" && lastLink && lastLink !== "online") FleetNotify.link(true);
+      if (s === "offline" && lastLink === "online") FleetNotify.link(false);
+      lastLink = s;
     });
 
     FleetMQTT.onMessage((topic, payload) => {
@@ -314,6 +371,15 @@
           saveQueue();
           renderBanner();
         }
+        const out = outbox.find(m => m.msg_id === payload.msg_id);
+        if (out && payload.status && payload.sender === "office") {
+          const prev = out.status;
+          out.status = payload.status;
+          out.offline = false;
+          saveOutbox();
+          renderSlot();
+          if (prev !== payload.status) FleetNotify.reply(payload.status);
+        }
       }
     });
 
@@ -331,8 +397,10 @@
     });
 
     loadQueue();
+    loadOutbox();
     renderCats();
     renderBanner();
+    renderSlot();
     clock();
     setInterval(clock, 1000);
     setInterval(publishStatus, 30000);
