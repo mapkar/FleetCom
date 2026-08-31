@@ -40,16 +40,22 @@
 
   <div class="setup" id="setup">
     <header>
+      <div class="logo">FLEETCOM <span>Bus</span></div>
+      <div class="clock" id="setup-clock"></div>
+      <div class="spacer"></div>
+      <button class="switch" id="setup-done" type="button">Done</button>
+    </header>
+    <div class="setup-lead">
       <h1>Choose route</h1>
       <p id="setup-sub">Office roster</p>
-    </header>
+    </div>
     <div class="setup-list" id="setup-list"></div>
     <form class="mqtt-form" id="mqtt-form">
       <div class="hint" id="mqtt-hint">Broker: framland.duckdns.org — Automaton needs a user and password</div>
       <label for="m-user">MQTT user</label>
-      <input type="text" id="m-user" autocomplete="off" />
+      <input type="text" id="m-user" autocomplete="username" autocapitalize="off" />
       <label for="m-pass">MQTT password</label>
-      <input type="password" id="m-pass" autocomplete="off" />
+      <input type="password" id="m-pass" autocomplete="current-password" />
       <button type="submit">Connect MQTT</button>
     </form>
   </div>
