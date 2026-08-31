@@ -4,6 +4,7 @@ Office dashboard and bus kiosk. Roster plus live MQTT through Automaton at `fram
 
 | File | What it is |
 |---|---|
+| `index.html` | BIOS-style landing / POST screen (bus or office) |
 | `office.html` / `office.css` / `office.js` | Dispatcher dashboard + roster editor |
 | `bus.html` / `bus.css` / `bus.js` | Driver kiosk |
 | `fleet-store.js` | Shared roster load/save |
@@ -15,6 +16,8 @@ Office dashboard and bus kiosk. Roster plus live MQTT through Automaton at `fram
 | `data/mqtt.json` | Live creds on the server only (gitignored) |
 | `data/roster.json` | Office-maintained bus list |
 | `PROJECT.md` | Design brief, topics, and message catalog |
+
+Apache on Automaton serves this tree at **`/acars/`**. Opening that path loads `index.html`.
 
 ## MQTT
 
@@ -60,10 +63,11 @@ QoS 1 on operational messages.
 python3 serve.py
 ```
 
-- Office: http://127.0.0.1:8080/office.html
-- Bus:    http://127.0.0.1:8080/bus.html
+- Landing: http://127.0.0.1:8080/
+- Office:  http://127.0.0.1:8080/office.html
+- Bus:     http://127.0.0.1:8080/bus.html
 
-`serve.py` listens on `0.0.0.0:8080`. A bus tablet on the LAN can use `http://<this-pc-ip>:8080/bus.html` and still reach Automaton through the TCP bridge.
+`serve.py` listens on `0.0.0.0:8080`. A bus tablet on the LAN can use `http://<this-pc-ip>:8080/` and pick **Bus mode**.
 
 ## Live traffic
 
