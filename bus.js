@@ -110,9 +110,13 @@
     }
 
     function clock() {
-      document.getElementById("clock").textContent = new Date().toLocaleString("en-US", {
+      const text = new Date().toLocaleString("en-US", {
         timeZone: "America/New_York", weekday: "short", hour: "2-digit", minute: "2-digit"
       });
+      const a = document.getElementById("clock");
+      const b = document.getElementById("setup-clock");
+      if (a) a.textContent = text;
+      if (b) b.textContent = text;
     }
 
     function officeLabel(status) {
@@ -126,6 +130,7 @@
       const b = current();
       const routeEl = document.getElementById("ident-route");
       const subEl = document.getElementById("ident-sub");
+      if (!routeEl || !subEl) return;
       if (!b) {
         routeEl.textContent = "Route: —";
         subEl.textContent = "Pick a route from the office roster";
@@ -325,6 +330,13 @@
       rememberOut(payload, { offline: !ok });
     });
     document.getElementById("switch").addEventListener("click", () => showSetup(true));
+    document.getElementById("setup-done").addEventListener("click", () => {
+      if (current()) showSetup(false);
+      else {
+        const hint = document.getElementById("mqtt-hint");
+        if (hint) hint.textContent = "Pick a route first";
+      }
+    });
     document.getElementById("setup-list").addEventListener("click", e => {
       const btn = e.target.closest(".pick");
       if (btn) applySelection(btn.dataset.id);
