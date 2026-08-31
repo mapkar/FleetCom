@@ -221,12 +221,23 @@
       background: var(--bg);
       z-index: 5;
       flex-direction: column;
+      min-height: 0;
     }
     .setup.on { display: flex; }
-    .setup header { display: block; }
-    .setup h1 { font-size: 18px; }
-    .setup p { color: var(--muted); font-size: 13px; margin-top: 4px; }
-    .setup-list { overflow-y: auto; flex: 1; padding: 10px 12px 16px; display: flex; flex-direction: column; gap: 8px; }
+    .setup header { flex-shrink: 0; }
+    .setup-lead { padding: 10px 16px 6px; flex-shrink: 0; }
+    .setup-lead h1 { font-size: 18px; font-weight: 700; }
+    .setup-lead p { color: var(--muted); font-size: 13px; margin-top: 4px; }
+    .setup-list {
+      overflow-y: auto;
+      flex: 1;
+      min-height: 0;
+      padding: 8px 12px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      -webkit-overflow-scrolling: touch;
+    }
     .pick {
       background: var(--bg-2);
       color: var(--text);
@@ -240,11 +251,21 @@
     .pick .dr { color: var(--text); font-weight: 650; margin-top: 4px; }
     .pick .sn { color: var(--muted); font-size: 13px; margin-top: 2px; }
     .empty-roster { padding: 24px; color: var(--muted); text-align: center; }
-    .mqtt-form { padding: 10px 12px 16px; display: flex; flex-direction: column; gap: 8px; }
+    .mqtt-form {
+      padding: 10px 12px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      flex-shrink: 0;
+      background: var(--bg-2);
+      border-top: 1px solid var(--line);
+      position: relative;
+      z-index: 2;
+    }
     .mqtt-form label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; }
     .mqtt-form input[type="text"], .mqtt-form input[type="password"] {
       width: 100%;
-      background: var(--bg-2);
+      background: var(--bg);
       color: var(--text);
       border: 1px solid var(--line);
       border-radius: 6px;
