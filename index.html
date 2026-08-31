@@ -28,7 +28,7 @@
       font-family: "Share Tech Mono", "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
       background: var(--bg);
       color: var(--amber);
-      overflow: hidden;
+      overflow: auto;
       user-select: none;
     }
     .crt {
@@ -96,14 +96,35 @@
     }
     .line {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) auto;
-      gap: 12px;
-      white-space: pre-wrap;
+      grid-template-columns: max-content minmax(16px, 1fr) max-content;
+      align-items: baseline;
+      column-gap: 10px;
       opacity: 0;
     }
     .line.on { opacity: 1; }
-    .line .label { color: var(--amber); }
-    .line .val { color: var(--muted); text-align: right; }
+    .line .label {
+      color: var(--amber);
+      white-space: nowrap;
+    }
+    .line .dots {
+      border-bottom: 1px dotted var(--amber-dim);
+      min-width: 16px;
+      height: 0.85em;
+    }
+    .line .val {
+      color: var(--muted);
+      text-align: right;
+      white-space: nowrap;
+      letter-spacing: 0.08em;
+    }
+    .line .detail {
+      grid-column: 1 / -1;
+      color: var(--muted);
+      font-size: 12px;
+      letter-spacing: 0.04em;
+      padding: 0 0 6px 1.15em;
+      overflow-wrap: anywhere;
+    }
     .ok { color: var(--green) !important; }
     .fail { color: var(--red) !important; }
     .warn { color: var(--orange) !important; }
@@ -228,6 +249,19 @@
         return "warn";
       }
 
+      function checkHtml(label, kind, status, detail) {
+        return (
+          '<span class="label">' + label + "</span>" +
+          '<span class="dots"></span>' +
+          '<span class="val' + (kind ? " " + statusClass(kind) : "") + '">' + status + "</span>" +
+          (detail ? '<span class="detail">' + detail + "</span>" : "")
+        );
+      }
+
+      function setCheck(el, label, kind, status, detail) {
+        el.innerHTML = checkHtml(label, kind, status, detail);
+      }
+
       function parseBrowser() {
         const ua = navigator.userAgent || "";
         const tests = [
@@ -344,7 +378,7 @@
         addLine("Copyright (C) OCMN Transportation  ACARS module", "hdr");
         await sleep(220);
 
-        addLine('<span class="label">CPU</span><span class="val">' + br.name + " " + (br.ver || "") + " / " + br.os + "</span>");
+        addLine(checkHtml("CPU", "", br.name + " " + (br.ver || ""), br.os));
         await sleep(260);
 
         const wsOk = typeof WebSocket !== "undefined";
@@ -353,21 +387,20 @@
           catch (_) { return false; }
         })();
         const brKind = wsOk && lsOk ? "ok" : "fail";
-        addLine(
-          '<span class="label">BROWSER</span><span class="val ' + statusClass(brKind) + '">' +
-          (wsOk && lsOk ? "OK" : "FAIL") + "  WS=" + (wsOk ? "YES" : "NO") + "  STORE=" + (lsOk ? "YES" : "NO") +
-          "</span>"
-        );
+        addLine(checkHtml(
+          "BROWSER",
+          brKind,
+          wsOk && lsOk ? "OK" : "FAIL",
+          "WS=" + (wsOk ? "YES" : "NO") + "   STORE=" + (lsOk ? "YES" : "NO")
+        ));
         await sleep(320);
 
-        const netLine = addLine('<span class="label">NETWORK</span><span class="val">CHECKING...</span>');
+        const netLine = addLine(checkHtml("NETWORK", "", "CHECKING"));
         const net = await probeNetwork();
-        netLine.innerHTML =
-          '<span class="label">NETWORK</span><span class="val ' + statusClass(net.ok ? "ok" : "fail") + '">' +
-          (net.ok ? "OK" : "FAIL") + "  " + net.detail.toUpperCase() + "</span>";
+        setCheck(netLine, "NETWORK", net.ok ? "ok" : "fail", net.ok ? "OK" : "FAIL", net.detail.toUpperCase());
         await sleep(280);
 
-        const mqttLine = addLine('<span class="label">MQTT BROKER</span><span class="val">PROBING...</span>');
+        const mqttLine = addLine(checkHtml("MQTT BROKER", "", "PROBING"));
         const bridge = await probeBridge();
         let mqttOk = false;
         let mqttDetail = "";
@@ -378,26 +411,21 @@
           const cand = wsCandidate(cfg);
           const probe = await probeWebSocket(cand.url, 4500);
           mqttOk = probe.ok;
-          mqttDetail = cand.label.toUpperCase() + "  " + (probe.ok ? "LISTENER UP" : probe.detail.toUpperCase());
+          mqttDetail = cand.label.toUpperCase() + " \u2014 " + (probe.ok ? "LISTENER UP" : probe.detail.toUpperCase());
           if (!probe.ok && bridge && bridge.error) {
             mqttDetail = "BRIDGE  " + String(bridge.error).toUpperCase();
           }
         }
-        mqttLine.innerHTML =
-          '<span class="label">MQTT BROKER</span><span class="val ' + statusClass(mqttOk ? "ok" : "warn") + '">' +
-          (mqttOk ? "OK" : "WARN") + "  " + mqttDetail + "</span>";
+        setCheck(mqttLine, "MQTT BROKER", mqttOk ? "ok" : "warn", mqttOk ? "OK" : "WARN", mqttDetail);
         await sleep(280);
 
         const rtc = fmtNow();
-        addLine(
-          '<span class="label">RTC</span><span class="val ok">' + rtc.date + "  " + rtc.time +
-          (rtc.tz ? "  " + rtc.tz : "") + "</span>"
-        );
+        addLine(checkHtml("RTC", "ok", rtc.time, rtc.date + (rtc.tz ? "   " + rtc.tz : "")));
         await sleep(240);
 
-        addLine('<span class="label">BOOT DEVICE</span><span class="val">ACARS / INDEX</span>');
+        addLine(checkHtml("BOOT DEVICE", "", "ACARS", "INDEX.HTML"));
         await sleep(200);
-        addLine('<span class="label">SYSTEM</span><span class="val ok">READY</span>');
+        addLine(checkHtml("SYSTEM", "ok", "READY"));
         await sleep(180);
 
         const cur = document.createElement("div");
@@ -406,7 +434,7 @@
         post.appendChild(cur);
 
         menu.classList.add("on");
-        foot.textContent = "1 BUS   ·   2 OFFICE   ·   ENTER FOLLOWS HIGHLIGHT";
+        foot.textContent = "1 BUS   \u00b7   2 OFFICE   \u00b7   ENTER FOLLOWS HIGHLIGHT";
       }
 
       document.addEventListener("keydown", (e) => {
